@@ -1,0 +1,257 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:gap/gap.dart';
+
+import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/glass_card.dart';
+import '../../../../shared/widgets/glass_text_field.dart';
+import '../../../../shared/widgets/primary_button.dart';
+import '../providers/download_provider.dart';
+
+class HomePage extends ConsumerStatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  ConsumerState<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends ConsumerState<HomePage> {
+  final TextEditingController _urlController = TextEditingController();
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
+  }
+
+  void _handleDownload() {
+    final url = _urlController.text.trim();
+    if (url.isEmpty) return;
+
+    // Obter estado atual para saber se é first fetch ou start download
+    final state = ref.read(downloadProvider);
+
+    if (state is DownloadInitial || state is DownloadError) {
+      ref.read(downloadProvider.notifier).fetchVideoInfo(url);
+    } else if (state is DownloadInfoLoaded) {
+      ref.read(downloadProvider.notifier).startDownload(url, state.info);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(downloadProvider);
+
+    // Listen for transient errors to show SnackBar
+    ref.listen(downloadProvider, (previous, next) {
+      if (next is DownloadError) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.message),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
+
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColors.backgroundDark,
+              AppColors.backgroundLight,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildHeader(),
+                const Gap(40),
+                _buildInputSection(state),
+                const Gap(24),
+                _buildStatusSection(state),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Column(
+      children: [
+        Icon(
+          PhosphorIcons.youtubeLogo(PhosphorIconsStyle.fill),
+          size: 64,
+          color: Colors.redAccent,
+        ),
+        const Gap(16),
+        Text(
+          'YouTube Downloader',
+          style: GoogleFonts.outfit(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        Text(
+          'Baixe vídeos para estudar offline',
+          style: GoogleFonts.outfit(
+            fontSize: 16,
+            color: Colors.white70,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInputSection(DownloadState state) {
+    bool isLoading = state is DownloadLoading;
+    bool showDownloadBtn = state is DownloadInfoLoaded;
+
+    return GlassCard(
+      child: Column(
+        children: [
+          GlassTextField(
+            controller: _urlController,
+            hintText: 'Cole o link do YouTube aqui...',
+            prefixIcon: const Icon(Icons.link, color: Colors.white54),
+          ),
+          const Gap(16),
+          PrimaryButton(
+            onPressed: isLoading ? null : _handleDownload,
+            text: showDownloadBtn ? 'Baixar Agora' : 'Buscar Vídeo',
+            isLoading: isLoading,
+            icon: Icon(
+              showDownloadBtn ? PhosphorIcons.downloadSimple() : PhosphorIcons.magnifyingGlass(),
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusSection(DownloadState state) {
+    if (state is DownloadInfoLoaded) {
+      final info = state.info;
+      return GlassCard(
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                info['thumbnail'],
+                width: 80,
+                height: 60,
+                fit: BoxFit.cover,
+                errorBuilder: (_,__,___) => Container(color: Colors.grey, width: 80, height: 60),
+              ),
+            ),
+            const Gap(12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    info['title'],
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    info['uploader'],
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (state is DownloadProgress) {
+      return GlassCard(
+        child: Column(
+          children: [
+            Text(
+              'Baixando... ${state.percentage.toStringAsFixed(1)}%',
+              style: const TextStyle(color: Colors.white),
+            ),
+            const Gap(8),
+            LinearProgressIndicator(
+              value: state.percentage / 100,
+              backgroundColor: Colors.white10,
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accentCyan),
+            ),
+            const Gap(8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(state.speed, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                Text('ETA: ${state.eta}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              ],
+            ),
+          ],
+        ),
+      );
+    } else if (state is DownloadSuccess) {
+      return GlassCard(
+        child: Column(
+          children: [
+            const Icon(Icons.check_circle, color: AppColors.accentGreen, size: 40),
+            const Gap(8),
+            const Text(
+              'Download Concluído!',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              'Salvo como: ${state.filename}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+          ],
+        ),
+      );
+    } else if (state is DownloadError) {
+      return GlassCard(
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.redAccent),
+                const Gap(12),
+                Expanded(
+                  child: Text(
+                    state.message,
+                    style: const TextStyle(color: Colors.redAccent),
+                  ),
+                ),
+              ],
+            ),
+            const Gap(12),
+            PrimaryButton(
+              onPressed: _handleDownload, // Retry with same URL
+              text: 'Tentar Novamente',
+              icon: const Icon(Icons.refresh, color: Colors.white),
+            ),
+          ],
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+}

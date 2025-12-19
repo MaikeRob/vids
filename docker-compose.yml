@@ -1,0 +1,20 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/pyproject.toml:/app/pyproject.toml # Persistir cache do uv se desejar, ou apenas re-instalar
+    environment:
+      - ENVIRONMENT=development
+    restart: unless-stopped
+  # Frontend web (opcional, se quiser rodar versão web via docker)
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3000:80"
