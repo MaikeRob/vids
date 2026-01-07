@@ -7,7 +7,9 @@ services:
       - "8000:8000"
     volumes:
       - ./backend/app:/app/app
-      - ./backend/pyproject.toml:/app/pyproject.toml # Persistir cache do uv se desejar, ou apenas re-instalar
+      - ./backend/pyproject.toml:/app/pyproject.toml
+      - ./backend/downloads:/app/downloads # Persistir downloads e servir
+
     environment:
       - ENVIRONMENT=development
     restart: unless-stopped

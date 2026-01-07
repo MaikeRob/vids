@@ -20,12 +20,12 @@ class PrimaryButton extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         gradient: onPressed != null ? AppColors.primaryGradient : null,
-        color: onPressed == null ? Colors.grey.withOpacity(0.3) : null,
+        color: onPressed == null ? Colors.grey.withValues(alpha: 0.3) : null,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           if (onPressed != null)
             BoxShadow(
-              color: AppColors.accentCyan.withOpacity(0.3),
+              color: AppColors.accentCyan.withValues(alpha: 0.3),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),

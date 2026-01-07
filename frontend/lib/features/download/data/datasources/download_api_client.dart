@@ -21,9 +21,13 @@ class DownloadApiClient {
     }
   }
 
-  Future<String> startDownload(String url) async {
+  Future<String> startDownload(String url, {int? quality}) async {
     try {
-      final response = await _dio.post('/start', data: {'url': url});
+      final Map<String, dynamic> data = {'url': url};
+      if (quality != null) {
+        data['quality'] = quality;
+      }
+      final response = await _dio.post('/start', data: data);
       return response.data['task_id'];
     } catch (e) {
       throw Exception('Falha ao iniciar download: $e');
@@ -32,5 +36,15 @@ class DownloadApiClient {
 
   WebSocketChannel connectToProgressStream(String taskId) {
     return WebSocketChannel.connect(Uri.parse('$_wsUrl/$taskId'));
+  }
+
+  Future<void> downloadFile(String filename, String savePath) async {
+    // URL estática do backend: http://10.0.2.2:8000/downloads/filename
+    final downloadUrl = 'http://10.0.2.2:8000/downloads/$filename';
+    try {
+      await _dio.download(downloadUrl, savePath);
+    } catch (e) {
+      throw Exception('Falha ao baixar arquivo para o dispositivo: $e');
+    }
   }
 }

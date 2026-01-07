@@ -9,6 +9,7 @@ import '../../../../shared/widgets/glass_card.dart';
 import '../../../../shared/widgets/glass_text_field.dart';
 import '../../../../shared/widgets/primary_button.dart';
 import '../providers/download_provider.dart';
+import '../widgets/quality_selector.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -72,15 +73,19 @@ class _HomePageState extends ConsumerState<HomePage> {
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildHeader(),
-                const Gap(40),
-                _buildInputSection(state),
-                const Gap(24),
-                _buildStatusSection(state),
-              ],
+            child: Center(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildHeader(),
+                    const Gap(40),
+                    _buildInputSection(state),
+                    const Gap(24),
+                    _buildStatusSection(state),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -129,6 +134,19 @@ class _HomePageState extends ConsumerState<HomePage> {
             prefixIcon: const Icon(Icons.link, color: Colors.white54),
           ),
           const Gap(16),
+          if (state is DownloadInfoLoaded && state.availableQualities.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.only(bottom: 16),
+              child: QualitySelector(
+                qualities: state.availableQualities,
+                selectedQuality: state.selectedQuality ?? 0,
+                onSelected: (quality) {
+                  ref.read(downloadProvider.notifier).setQuality(quality);
+                },
+              ),
+            ),
+          ],
           PrimaryButton(
             onPressed: isLoading ? null : _handleDownload,
             text: showDownloadBtn ? 'Baixar Agora' : 'Buscar Vídeo',
@@ -156,7 +174,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 width: 80,
                 height: 60,
                 fit: BoxFit.cover,
-                errorBuilder: (_,__,___) => Container(color: Colors.grey, width: 80, height: 60),
+                errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey, width: 80, height: 60),
               ),
             ),
             const Gap(12),

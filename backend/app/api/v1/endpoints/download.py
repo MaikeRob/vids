@@ -17,7 +17,8 @@ async def get_video_info(request: DownloadRequest):
             duration=info.get('duration', 0),
             uploader=info.get('uploader', 'Unknown'),
             view_count=info.get('view_count', 0),
-            webpage_url=info.get('webpage_url', request.url)
+            webpage_url=info.get('webpage_url', request.url),
+            qualities=info.get('qualities', [])
         )
     except Exception as e:
         logger.error(f"Erro ao obter info: {e}")
@@ -39,7 +40,8 @@ async def start_download(request: DownloadRequest):
     task_id = str(uuid.uuid4())
 
     # Iniciar download em background (fire and forget)
-    asyncio.create_task(YtDlpService.download_video(request.url, task_id))
+    # Passamos quality se existir
+    asyncio.create_task(YtDlpService.download_video(request.url, task_id, request.quality))
 
     return DownloadResponse(
         task_id=task_id,

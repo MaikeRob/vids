@@ -3,6 +3,9 @@ FROM python:3.12-slim
 # Instalar ffmpeg (necessário para yt-dlp)
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
+# Instalar Deno (Runtime JS recomendado para yt-dlp)
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+
 WORKDIR /app
 
 # Instalar uv

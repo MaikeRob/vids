@@ -9,7 +9,7 @@ import 'package:async/async.dart' as _i7;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i6;
 import 'package:stream_channel/stream_channel.dart' as _i3;
-import 'package:vids_frontend/features/download/data/repositories/download_repository_impl.dart'
+import 'package:vids_frontend/features/download/data/datasources/download_api_client.dart'
     as _i4;
 import 'package:web_socket_channel/web_socket_channel.dart' as _i2;
 
@@ -45,12 +45,11 @@ class _FakeStreamChannel_2<T> extends _i1.SmartFake
     : super(parent, parentInvocation);
 }
 
-/// A class which mocks [DownloadRepository].
+/// A class which mocks [DownloadApiClient].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockDownloadRepository extends _i1.Mock
-    implements _i4.DownloadRepository {
-  MockDownloadRepository() {
+class MockDownloadApiClient extends _i1.Mock implements _i4.DownloadApiClient {
+  MockDownloadApiClient() {
     _i1.throwOnMissingStub(this);
   }
 
@@ -78,12 +77,12 @@ class MockDownloadRepository extends _i1.Mock
           as _i5.Future<String>);
 
   @override
-  _i2.WebSocketChannel trackProgress(String? taskId) =>
+  _i2.WebSocketChannel connectToProgressStream(String? taskId) =>
       (super.noSuchMethod(
-            Invocation.method(#trackProgress, [taskId]),
+            Invocation.method(#connectToProgressStream, [taskId]),
             returnValue: _FakeWebSocketChannel_0(
               this,
-              Invocation.method(#trackProgress, [taskId]),
+              Invocation.method(#connectToProgressStream, [taskId]),
             ),
           )
           as _i2.WebSocketChannel);

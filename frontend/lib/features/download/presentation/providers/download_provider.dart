@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/datasources/download_api_client.dart';
-import '../../data/repositories/download_repository_impl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:convert';
+import 'dart:io';
 
 // Providers
 final downloadApiClientProvider = Provider((ref) => DownloadApiClient());
-final downloadRepositoryProvider = Provider((ref) => DownloadRepository(ref.read(downloadApiClientProvider)));
 
 // State
 abstract class DownloadState {}
@@ -13,7 +13,18 @@ class DownloadInitial extends DownloadState {}
 class DownloadLoading extends DownloadState {} // Buscando info
 class DownloadInfoLoaded extends DownloadState {
   final Map<String, dynamic> info;
-  DownloadInfoLoaded(this.info);
+  final List<int> availableQualities;
+  final int? selectedQuality;
+
+  DownloadInfoLoaded(this.info, {this.availableQualities = const [], this.selectedQuality});
+
+  DownloadInfoLoaded copyWith({int? selectedQuality}) {
+    return DownloadInfoLoaded(
+      info,
+      availableQualities: availableQualities,
+      selectedQuality: selectedQuality ?? this.selectedQuality,
+    );
+  }
 }
 class DownloadProgress extends DownloadState {
   final Map<String, dynamic> info;
@@ -34,31 +45,50 @@ class DownloadError extends DownloadState {
 
 // Notifier
 class DownloadNotifier extends Notifier<DownloadState> {
-  late final DownloadRepository _repository;
+  late final DownloadApiClient _client;
 
   @override
   DownloadState build() {
-    _repository = ref.read(downloadRepositoryProvider);
+    _client = ref.read(downloadApiClientProvider);
     return DownloadInitial();
   }
 
   Future<void> fetchVideoInfo(String url) async {
     state = DownloadLoading();
     try {
-      final info = await _repository.getVideoInfo(url);
-      state = DownloadInfoLoaded(info);
+      final info = await _client.getVideoInfo(url);
+      
+      final List<dynamic> qualitiesRaw = info['qualities'] ?? [];
+      final List<int> qualities = qualitiesRaw.cast<int>();
+
+      state = DownloadInfoLoaded(
+        info,
+        availableQualities: qualities,
+        selectedQuality: qualities.isNotEmpty ? qualities.first : null,
+      );
     } catch (e) {
       state = DownloadError(e.toString());
     }
   }
 
+  void setQuality(int quality) {
+    if (state is DownloadInfoLoaded) {
+      state = (state as DownloadInfoLoaded).copyWith(selectedQuality: quality);
+    }
+  }
+
   Future<void> startDownload(String url, Map<String, dynamic> info) async {
     try {
+      int? quality;
+      if (state is DownloadInfoLoaded) {
+        quality = (state as DownloadInfoLoaded).selectedQuality;
+      }
+
       // Iniciar download
-      final taskId = await _repository.startDownload(url);
+      final taskId = await _client.startDownload(url, quality: quality);
 
       // Conectar WebSocket
-      final channel = _repository.trackProgress(taskId);
+      final channel = _client.connectToProgressStream(taskId);
 
       channel.stream.listen((message) {
         final data = jsonDecode(message);
@@ -70,7 +100,9 @@ class DownloadNotifier extends Notifier<DownloadState> {
             data['eta'].toString(),
           );
         } else if (data['status'] == 'finished') {
-          state = DownloadSuccess(data['filename']);
+          final filename = data['filename'];
+          // Trigger file download to device
+          _downloadToDevice(filename);
           channel.sink.close();
         } else if (data['status'] == 'error') {
           state = DownloadError(data['message']);
@@ -82,6 +114,25 @@ class DownloadNotifier extends Notifier<DownloadState> {
 
     } catch (e) {
       state = DownloadError(e.toString());
+    }
+  }
+
+  Future<void> _downloadToDevice(String filename) async {
+    try {
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = await getExternalStorageDirectory();
+      }
+      
+      // Fallback for iOS or if external storage fails
+      directory ??= await getApplicationDocumentsDirectory();
+
+      final savePath = '${directory.path}/$filename';
+      
+      await _client.downloadFile(filename, savePath);
+      state = DownloadSuccess(filename);
+    } catch (e) {
+      state = DownloadError("Erro ao salvar no dispositivo: $e");
     }
   }
 }

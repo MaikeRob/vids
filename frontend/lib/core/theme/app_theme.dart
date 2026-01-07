@@ -11,7 +11,7 @@ class AppTheme {
         primary: Color(0xFF667EEA),
         secondary: Color(0xFFF093FB),
         surface: AppColors.backgroundLight,
-        background: AppColors.backgroundDark,
+        // background: AppColors.backgroundDark, // Deprecated
       ),
       textTheme: const TextTheme(
         headlineMedium: TextStyle(
