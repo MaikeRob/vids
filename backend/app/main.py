@@ -24,9 +24,9 @@ from app.core.config import get_settings
 
 app.include_router(download.router, prefix="/api/v1/download", tags=["download"])
 
-# Serve downloads staticamente
-settings = get_settings()
-app.mount("/downloads", StaticFiles(directory=settings.DOWNLOAD_DIR), name="downloads")
+# Serve downloads staticamente - REMOVIDO EM FAVOR DO ENDPOINT /file COM AUTO-DELETE
+# settings = get_settings()
+# app.mount("/downloads", StaticFiles(directory=settings.DOWNLOAD_DIR), name="downloads")
 
 @app.on_event("startup")
 async def startup_event():

@@ -1,42 +1,79 @@
-# Resumo do Status do Projeto
+# Guia de Preparação para Teste Mobile (APK)
 
-Este documento resume as implementações realizadas e o estado atual do projeto "Vids".
+O projeto está estável e funcional no emulador. Para testar em um dispositivo Android físico, siga os passos abaixo para configurar a rede, compilar o APK e instalar.
 
-## ✅ O Que Já Foi Feito
+## 1. Configuração de Rede (Conectividade)
 
-### 1. Backend (Python/FastAPI)
-*   **Extração de Qualidade**: Implementada lógica robusta no `YtDlpService` para identificar todas as resoluções de vídeo disponíveis (ex: 360p, 720p, 1080p), ignorando streams apenas de áudio.
-*   **Qualidade de Áudio Premium**: A lógica de download foi ajustada para garantir **sempre** a melhor faixa de áudio M4A/AAC original, mesclando-a automaticamente com o vídeo da qualidade escolhida pelo usuário.
-*   **API & Logs**: Endpoints de `info` e `start` atualizados com logs detalhados para facilitar o diagnóstico de formatos encontrados.
+Como o celular e o computador estão em dispositivos separados, o `localhost` (ou `10.0.2.2`) do código não funcionará no celular. Eles precisam estar na mesma rede Wi-Fi.
 
-### 2. Frontend (Flutter)
-*   **Design "Glassmorphism"**: A interface (UI) foi totalmente reformulada para um visual moderno e "premium", utilizando fundos escuros, transparências, blur e gradientes.
-*   **Seletor de Qualidade**: 
-    *   Criado o widget `QualitySelector`.
-    *   Exibe opções em "chips" clicáveis.
-    *   Estado visual claro: Gradiente + Ícone de Check (✓) quando selecionado.
-*   **Feedback Visual**: O título da seção foi alterado para "Selecione a Qualidade" para indicar claramente a ação esperada.
+### Passo 1: Descobrir seu IP Local
+No terminal do Linux, execute:
+```bash
+hostname -I
+```
+Anote o primeiro IP retornado (ex: `192.168.1.15`).
 
-## ⚠️ Pontos de Atenção (Logs Recentes)
-*   **Erro de Overflow (RenderFlex)**: Os logs de execução mostram um erro de `RenderFlex overflowed by 102 pixels`. Isso ocorre porque o conteúdo da tela é maior que o espaço disponível (provavelmente quando o teclado virtual abre ou em telas menores).
-    *   **Solução Recomendada**: Envolver o conteúdo da `HomePage` em um `SingleChildScrollView`.
+### Passo 2: Atualizar o Frontend
+Abra o arquivo `frontend/lib/features/download/data/datasources/download_api_client.dart`.
+Altere as constantes `_baseUrl` e `_wsUrl` e o método `downloadFile` para usar seu IP real em vez de `10.0.2.2`.
 
-## 🚀 Próximos Passos Imediatos
-1.  **Corrigir Rolagem**: Aplicar `SingleChildScrollView` na Home para corrigir o erro de overflow e garantir que o botão de download esteja sempre acessível.
-3.  **Testar Downloads**: Confirmar em dispositivo real se a mesclagem (Video + Audio M4A) está tocando corretamente nos players nativos.
+```dart
+// Exemplo (Substitua 192.168.X.X pelo seu IP)
+static const String _baseUrl = 'http://192.168.1.15:8000/api/v1/download';
+static const String _wsUrl = 'ws://192.168.1.15:8000/api/v1/download/ws';
 
-### 3. Estratégia de Testes (QA Completo)
-A fim de garantir a robustez da aplicação, será implementada uma suíte completa de testes:
+// ... dentro de downloadFile ...
+final downloadUrl = 'http://192.168.1.15:8000/api/v1/download/file/$filename';
+```
 
-*   **Testes Unitários (Backend)**:
-    *   Testar isoladamente o `YtDlpService` (mockando o binário `yt-dlp`) para garantir que a lógica de extração de qualidade e construção da string de formato estejam corretas.
-    *   Testar os schemas Pydantic e validações.
-*   **Testes Unitários (Frontend)**:
-    *   Testar `DownloadNotifier` e `Providers` com `state_notifier_test` para garantir que os estados (Loading, Loaded, Error) transitem corretamente.
-    *   Testar widgets isolados (como o novo `QualitySelector`) para garantir que renderizam as opções corretas.
-*   **Testes de Integração**:
-    *   **API**: Criar testes que sobem uma instância de teste do FastAPI e chamam os endpoints reais (com mocks apenas para o download externo) para verificar o fluxo HTTP completo.
-    *   **Frontend**: Testes de integração de widgets verificando a interação entre a camada de UI e os Providers.
-*   **Testes E2E (End-to-End)**:
-    *   Utilizar **Patrol** ou **Flutter Integration Test** para simular um usuário real: Abrir o app -> Colocar Link -> Escolher 720p -> Clicar Baixar -> Verificar Sucesso.
+### Passo 3: Liberar Firewall (Se necessário)
+Certifique-se de que a porta `8000` do seu computador esteja acessível na rede local.
+Se usar `ufw`:
+```bash
+sudo ufw allow 8000/tcp
+```
 
+---
+
+## 2. Compilar o APK
+
+Com o código atualizado, vá para a pasta do frontend e compile:
+
+```bash
+cd frontend
+flutter build apk --release
+```
+
+O arquivo gerado estará em:
+`frontend/build/app/outputs/flutter-apk/app-release.apk`
+
+---
+
+## 3. Instalar e Testar
+
+### Opção A: Via Cabo (ADB)
+Com o celular conectado e Depuração USB ativa:
+```bash
+adb install build/app/outputs/flutter-apk/app-release.apk
+```
+
+### Opção B: Transferência de Arquivo
+Envie o arquivo `app-release.apk` para o celular (via USB, Drive, Telegram, etc.) e instale manualmente (pode ser necessário autorizar "Fontes Desconhecidas").
+
+---
+
+## ✅ Resumo do Status Atual (O que Testar)
+1.  **Download**: Testar se o download inicia e termina.
+2.  **Progresso**: Verificar se a barra e porcentagem atualizam no celular.
+3.  **Reprodução**: Verificar se o vídeo baixado toca com áudio e vídeo sincronizados na galeria do celular.
+4.  **Auto-Delete**: Verificar se o download funciona sem erros de "Arquivo não encontrado" (validando o novo endpoint).
+
+## 🛠️ Comandos Úteis
+Rebuildar Backend (se mudar algo no Python):
+```bash
+sudo docker compose up --build -d backend
+```
+Verificar logs do Backend (se o app der erro de conexão):
+```bash
+sudo docker logs -f vids-backend-1
+```

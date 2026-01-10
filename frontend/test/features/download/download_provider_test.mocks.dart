@@ -64,13 +64,13 @@ class MockDownloadApiClient extends _i1.Mock implements _i4.DownloadApiClient {
           as _i5.Future<Map<String, dynamic>>);
 
   @override
-  _i5.Future<String> startDownload(String? url) =>
+  _i5.Future<String> startDownload(String? url, {int? quality}) =>
       (super.noSuchMethod(
-            Invocation.method(#startDownload, [url]),
+            Invocation.method(#startDownload, [url], {#quality: quality}),
             returnValue: _i5.Future<String>.value(
               _i6.dummyValue<String>(
                 this,
-                Invocation.method(#startDownload, [url]),
+                Invocation.method(#startDownload, [url], {#quality: quality}),
               ),
             ),
           )
@@ -86,6 +86,15 @@ class MockDownloadApiClient extends _i1.Mock implements _i4.DownloadApiClient {
             ),
           )
           as _i2.WebSocketChannel);
+
+  @override
+  _i5.Future<void> downloadFile(String? filename, String? savePath) =>
+      (super.noSuchMethod(
+            Invocation.method(#downloadFile, [filename, savePath]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
 }
 
 /// A class which mocks [WebSocketChannel].

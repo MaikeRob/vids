@@ -34,7 +34,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     // Obter estado atual para saber se é first fetch ou start download
     final state = ref.read(downloadProvider);
 
-    if (state is DownloadInitial || state is DownloadError) {
+    if (state is DownloadInitial || state is DownloadError || state is DownloadSuccess) {
       ref.read(downloadProvider.notifier).fetchVideoInfo(url);
     } else if (state is DownloadInfoLoaded) {
       ref.read(downloadProvider.notifier).startDownload(url, state.info);
@@ -71,22 +71,29 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Center(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildHeader(),
-                    const Gap(40),
-                    _buildInputSection(state),
-                    const Gap(24),
-                    _buildStatusSection(state),
-                  ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildHeader(),
+                        const Gap(40),
+                        _buildInputSection(state),
+                        const Gap(24),
+                        _buildStatusSection(state),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -129,6 +136,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       child: Column(
         children: [
           GlassTextField(
+            key: const Key('url_input'),
             controller: _urlController,
             hintText: 'Cole o link do YouTube aqui...',
             prefixIcon: const Icon(Icons.link, color: Colors.white54),
@@ -148,6 +156,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           ],
           PrimaryButton(
+            key: const Key('action_button'),
             onPressed: isLoading ? null : _handleDownload,
             text: showDownloadBtn ? 'Baixar Agora' : 'Buscar Vídeo',
             isLoading: isLoading,

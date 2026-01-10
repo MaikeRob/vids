@@ -4,6 +4,7 @@ from ....services.websocket_manager import manager
 from ....schemas.video import VideoInfo, DownloadRequest, DownloadResponse
 import uuid
 import asyncio
+from loguru import logger
 
 router = APIRouter()
 
@@ -21,8 +22,9 @@ async def get_video_info(request: DownloadRequest):
             qualities=info.get('qualities', [])
         )
     except Exception as e:
-        logger.error(f"Erro ao obter info: {e}")
-        raise HTTPException(status_code=400, detail=f"Falha ao obter vídeo: {str(e)}")
+        logger.exception("Detalhes completos do erro:")
+        logger.error(f"Erro ao obter info: {repr(e)}")
+        raise HTTPException(status_code=400, detail=f"Falha ao obter vídeo: {str(e) or repr(e)}")
 
 @router.post("/start", response_model=DownloadResponse)
 async def start_download(request: DownloadRequest):
@@ -38,6 +40,13 @@ async def start_download(request: DownloadRequest):
     # Backend inicia download async usando esse taskId.
 
     task_id = str(uuid.uuid4())
+
+    # Validar ambiente antes de aceitar a tarefa
+    try:
+        YtDlpService.validate_integrity()
+    except Exception as e:
+        logger.error(f"Falha de integridade ao iniciar download: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
     # Iniciar download em background (fire and forget)
     # Passamos quality se existir
@@ -55,7 +64,35 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await manager.connect(websocket, client_id)
     try:
         while True:
-            # Manter conexão viva e ouvir (opcional receber comandos)
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(client_id)
+
+import os
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
+from loguru import logger
+from fastapi import HTTPException
+
+def remove_file(path: str):
+    try:
+        os.remove(path)
+        logger.info(f"Arquivo removido com sucesso: {path}")
+    except Exception as e:
+        logger.error(f"Erro ao remover arquivo {path}: {e}")
+
+@router.get("/file/{filename}")
+async def download_file(filename: str):
+    from ....core.config import get_settings
+    settings = get_settings()
+    file_path = f"{settings.DOWNLOAD_DIR}/{filename}"
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado ou já expirou.")
+        
+    return FileResponse(
+        path=file_path, 
+        filename=filename, 
+        media_type='application/octet-stream', 
+        background=BackgroundTask(remove_file, file_path)
+    )

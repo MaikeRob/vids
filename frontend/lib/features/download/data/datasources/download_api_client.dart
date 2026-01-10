@@ -39,8 +39,8 @@ class DownloadApiClient {
   }
 
   Future<void> downloadFile(String filename, String savePath) async {
-    // URL estática do backend: http://10.0.2.2:8000/downloads/filename
-    final downloadUrl = 'http://10.0.2.2:8000/downloads/$filename';
+    // URL dinâmica do backend com auto-delete: http://10.0.2.2:8000/api/v1/download/file/filename
+    final downloadUrl = 'http://10.0.2.2:8000/api/v1/download/file/$filename';
     try {
       await _dio.download(downloadUrl, savePath);
     } catch (e) {
