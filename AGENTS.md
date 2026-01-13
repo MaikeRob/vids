@@ -3,8 +3,8 @@
 App educacional para download de vídeos do YouTube.
 
 ## Stack
-**Backend**: FastAPI + Python 3.12 + yt-dlp + uv  
-**Frontend**: Flutter + Riverpod + Freezed  
+**Backend**: FastAPI + Python 3.12 + yt-dlp + uv
+**Frontend**: Flutter + Riverpod + Freezed
 **Design**: Dark mode (#0f0f23) + Glassmorphism + Gradients (#667eea→#764ba2)
 
 ## Comandos
@@ -65,7 +65,7 @@ flutter analyze
    - Possíveis abordagens (A, B, C)
    - Prós e contras de cada uma
    - Recomendação
-4. **Impacto e Efeitos Colaterais (CRÍTICO)**: 
+4. **Impacto e Efeitos Colaterais (CRÍTICO)**:
    - Analise consequências da mudança em todo o sistema.
    - Pense: "Se eu alterar X, o que acontece com Y?" (Ex: Importações, tipos, dependências de runtime).
    - Verifique se *todos* os símbolos usados foram importados. NÃO assuma.
@@ -97,3 +97,10 @@ flutter analyze
 - FastAPI: https://fastapi.tiangolo.com
 - Flutter: https://docs.flutter.dev
 - Riverpod: https://riverpod.dev
+
+## Frontend Progress Logic
+O backend utiliza streaming para entregar o conteúdo (`/stream`), portanto não envia `Content-Length` na resposta.
+Para calcular a porcentagem de download:
+1. Obtenha o tamanho estimado (`filesize` ou `filesize_approx`) do endpoint `/info` para a qualidade escolhida.
+2. Durante o download do stream, some os bytes recebidos.
+3. `Progresso % = (Bytes Recebidos / Tamanho Estimado) * 100`.
