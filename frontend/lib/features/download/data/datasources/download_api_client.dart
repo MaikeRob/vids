@@ -3,12 +3,9 @@ import 'package:dio/dio.dart';
 class DownloadApiClient {
   final Dio _dio;
 
-  // URL base - usar 10.0.2.2 para emulador Android acessar localhost do host
-  // URL base - ALTERADO para IP da LAN para teste em dispositivo real
-  // URL base - usar 10.0.2.2 para emulador Android acessar localhost do host
-  static const String _baseUrl = 'http://10.0.2.2:8000/api/v1/download';
+  final String baseUrl;
 
-  DownloadApiClient() : _dio = Dio(BaseOptions(baseUrl: _baseUrl));
+  DownloadApiClient({required this.baseUrl}) : _dio = Dio(BaseOptions(baseUrl: baseUrl));
 
   Future<Map<String, dynamic>> getVideoInfo(String url) async {
     try {

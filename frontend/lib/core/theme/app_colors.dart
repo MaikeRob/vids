@@ -17,11 +17,14 @@ class AppColors {
   // Backgrounds
   static const Color backgroundDark = Color(0xFF0F0F23);
   static const Color backgroundLight = Color(0xFF1A1A2E);
+  static const Color background = backgroundDark;
+  static const Color surface = Color(0xFF252540);
 
   // Accents
   static const Color primary = Color(0xFF667EEA);
   static const Color accentCyan = Color(0xFF00D4FF);
   static const Color accentGreen = Color(0xFF00FF88);
+  static const Color accentPurple = Color(0xFF9D4EDD);
 
   // Text
   static const Color textPrimary = Colors.white;

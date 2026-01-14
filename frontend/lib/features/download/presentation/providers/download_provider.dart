@@ -7,8 +7,20 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../settings/presentation/providers/settings_provider.dart';
+
 // Providers
-final downloadApiClientProvider = Provider((ref) => DownloadApiClient());
+// Recria o cliente sempre que as configurações mudarem
+final downloadApiClientProvider = Provider((ref) {
+  try {
+    final settings = ref.watch(settingsProvider);
+    return DownloadApiClient(baseUrl: settings.baseUrl);
+  } catch (e, st) {
+    debugPrint("DownloadApiClientProvider Error: $e\n$st");
+    // Fallback para evitar crash total
+    return DownloadApiClient(baseUrl: 'http://127.0.0.1:8000/api/v1/download');
+  }
+});
 
 // State
 abstract class DownloadState {}
@@ -68,12 +80,19 @@ class DownloadError extends DownloadState {
 
 // Notifier
 class DownloadNotifier extends Notifier<DownloadState> {
-  late final DownloadApiClient _client;
+  late DownloadApiClient _client;
 
   @override
   DownloadState build() {
-    _client = ref.read(downloadApiClientProvider);
-    return DownloadInitial();
+    // Usar ref.watch para que o Notifier seja reconstruído se o cliente mudar (configurações alteradas)
+    try {
+      _client = ref.watch(downloadApiClientProvider);
+      return DownloadInitial();
+    } catch (e, st) {
+      // Caso o provider de API falhe catastroficamente
+      _client = DownloadApiClient(baseUrl: 'http://127.0.0.1:8000/api/v1/download');
+      return DownloadError("Falha na inicialização do módulo de download: $e");
+    }
   }
 
   Future<void> fetchVideoInfo(String url) async {
@@ -83,16 +102,6 @@ class DownloadNotifier extends Notifier<DownloadState> {
 
       final List<dynamic> qualities = info['qualities'] ?? [];
 
-      // Extract just the heights or keep full objects?
-      // For Selector, we usually want just heights or objects.
-      // Let's pass the full quality objects to the selector if possible in the future,
-      // but for now let's keep it compatible with the previous 'int' selector if possible,
-      // or update it. Ideally, we extract heights.
-      // Schema changed 'qualities' to objects.
-
-      // Let's assume current QualitySelector expects ints, so we map them.
-      // But we should store full info state to access file sizes.
-
       // Extract heights for default selection
       int? defaultQ;
       if (qualities.isNotEmpty) {
@@ -101,7 +110,7 @@ class DownloadNotifier extends Notifier<DownloadState> {
 
       state = DownloadInfoLoaded(
         info,
-        availableQualities: qualities, // List of Maps now
+        availableQualities: qualities,
         selectedQuality: defaultQ,
       );
     } catch (e) {

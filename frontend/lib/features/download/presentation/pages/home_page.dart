@@ -10,6 +10,7 @@ import '../../../../shared/widgets/glass_text_field.dart';
 import '../../../../shared/widgets/primary_button.dart';
 import '../providers/download_provider.dart';
 import '../widgets/quality_selector.dart';
+import '../../../settings/presentation/pages/settings_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -59,6 +60,22 @@ class _HomePageState extends ConsumerState<HomePage> {
     });
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings, color: Colors.white),
+            onPressed: () {
+               Navigator.push(
+                 context,
+                 MaterialPageRoute(builder: (context) => SettingsPage()),
+               );
+            },
+          ),
+        ],
+      ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
