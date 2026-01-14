@@ -128,6 +128,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
+
   Widget _buildInputSection(DownloadState state) {
     bool isLoading = state is DownloadLoading;
     bool showDownloadBtn = state is DownloadInfoLoaded;
@@ -147,7 +148,9 @@ class _HomePageState extends ConsumerState<HomePage> {
               width: double.infinity,
               padding: const EdgeInsets.only(bottom: 16),
               child: QualitySelector(
-                qualities: state.availableQualities,
+                // Map the full objects to just heights for the selector widget
+                // Assuming QualitySelector expects List<int>
+                qualities: state.availableQualities.map<int>((q) => q['height'] as int).toList(),
                 selectedQuality: state.selectedQuality ?? 0,
                 onSelected: (quality) {
                   ref.read(downloadProvider.notifier).setQuality(quality);
@@ -210,28 +213,62 @@ class _HomePageState extends ConsumerState<HomePage> {
           ],
         ),
       );
-    } else if (state is DownloadProgress) {
+    } else if (state is DownloadProcessing) {
       return GlassCard(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Baixando... ${state.percentage.toStringAsFixed(1)}%',
-              style: const TextStyle(color: Colors.white),
+             const Text(
+              'Processando Download...',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
-            const Gap(8),
-            LinearProgressIndicator(
-              value: state.percentage / 100,
-              backgroundColor: Colors.white10,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accentCyan),
-            ),
-            const Gap(8),
+            const Gap(12),
+
+            // Video Progress
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(state.speed, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                Text('ETA: ${state.eta}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                const Text('Vídeo', style: TextStyle(color: Colors.white70)),
+                Text('${state.videoProgress.toStringAsFixed(0)}%', style: const TextStyle(color: Colors.white)),
               ],
             ),
+            const Gap(4),
+            LinearProgressIndicator(
+              value: state.videoProgress / 100,
+              backgroundColor: Colors.white10,
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accentCyan),
+            ),
+            const Gap(12),
+
+             // Audio Progress
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Áudio', style: TextStyle(color: Colors.white70)),
+                Text('${state.audioProgress.toStringAsFixed(0)}%', style: const TextStyle(color: Colors.white)),
+              ],
+            ),
+            const Gap(4),
+            LinearProgressIndicator(
+              value: state.audioProgress / 100,
+              backgroundColor: Colors.white10,
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accentPurple),
+            ),
+
+            if (state.isMerging) ...[
+              const Gap(16),
+              const Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white,)
+                  ),
+                  Gap(8),
+                  Text('Unindo arquivos (FFmpeg)...', style: TextStyle(color: Colors.yellowAccent)),
+                ],
+              )
+            ]
           ],
         ),
       );
@@ -249,6 +286,16 @@ class _HomePageState extends ConsumerState<HomePage> {
               'Salvo como: ${state.filename}',
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+             const Gap(12),
+            PrimaryButton(
+              onPressed: () {
+                // Reset to initial or keep info? Let's reset for new search
+                 ref.invalidate(downloadProvider);
+                 _urlController.clear();
+              },
+              text: 'Novo Download',
+              icon: const Icon(Icons.download, color: Colors.white),
             ),
           ],
         ),

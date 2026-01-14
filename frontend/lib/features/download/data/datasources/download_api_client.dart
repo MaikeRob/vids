@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 class DownloadApiClient {
   final Dio _dio;
@@ -8,7 +7,6 @@ class DownloadApiClient {
   // URL base - ALTERADO para IP da LAN para teste em dispositivo real
   // URL base - usar 10.0.2.2 para emulador Android acessar localhost do host
   static const String _baseUrl = 'http://10.0.2.2:8000/api/v1/download';
-  static const String _wsUrl = 'ws://10.0.2.2:8000/api/v1/download/ws';
 
   DownloadApiClient() : _dio = Dio(BaseOptions(baseUrl: _baseUrl));
 
@@ -16,35 +14,74 @@ class DownloadApiClient {
     try {
       final response = await _dio.post('/info', data: {'url': url});
       return response.data;
+    } on DioException catch (e) {
+      if (e.response != null) {
+        final data = e.response?.data;
+        String msg = 'Erro desconhecido (${e.response?.statusCode})';
+
+        if (data is Map) {
+           if (data.containsKey('detail')) {
+             msg = data['detail'].toString();
+           } else if (data.containsKey('error')) {
+             msg = data['error'].toString();
+           }
+        }
+
+        if (e.response?.statusCode == 403) {
+           throw Exception("Acesso Negado: $msg");
+        }
+        throw Exception(msg);
+      }
+      throw Exception('Erro de conexão: ${e.message}');
     } catch (e) {
       throw Exception('Falha ao obter info do vídeo: $e');
     }
   }
 
-  Future<String> startDownload(String url, {int? quality}) async {
-    try {
-      final Map<String, dynamic> data = {'url': url};
-      if (quality != null) {
-        data['quality'] = quality;
-      }
-      final response = await _dio.post('/start', data: data);
-      return response.data['task_id'];
-    } catch (e) {
-      throw Exception('Falha ao iniciar download: $e');
+  Future<void> downloadStream({
+    required String url,
+    required String mode,
+    required String savePath,
+    int? quality,
+    required Function(int received, int total) onReceiveProgress,
+  }) async {
+    final Map<String, dynamic> data = {
+      'url': url,
+      'mode': mode,
+    };
+    if (quality != null) {
+      data['quality'] = quality;
     }
-  }
 
-  WebSocketChannel connectToProgressStream(String taskId) {
-    return WebSocketChannel.connect(Uri.parse('$_wsUrl/$taskId'));
-  }
-
-  Future<void> downloadFile(String filename, String savePath) async {
-    // URL dinâmica do backend com auto-delete: http://10.0.2.2:8000/api/v1/download/file/filename
-    final downloadUrl = 'http://10.0.2.2:8000/api/v1/download/file/$filename';
     try {
-      await _dio.download(downloadUrl, savePath);
+      await _dio.download(
+        '/stream',
+        savePath,
+        data: data,
+        options: Options(method: 'POST'),
+        onReceiveProgress: onReceiveProgress,
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        final data = e.response?.data;
+        String msg = 'Erro desconhecido (${e.response?.statusCode})';
+
+        if (data is Map) {
+           if (data.containsKey('detail')) {
+             msg = data['detail'].toString();
+           } else if (data.containsKey('error')) {
+             msg = data['error'].toString();
+           }
+        }
+
+        if (e.response?.statusCode == 403) {
+          throw Exception("Acesso Negado: $msg");
+        }
+        throw Exception(msg);
+      }
+      throw Exception('Erro de conexão: ${e.message}');
     } catch (e) {
-      throw Exception('Falha ao baixar arquivo para o dispositivo: $e');
+      throw Exception('Falha ao baixar stream ($mode): $e');
     }
   }
 }
