@@ -48,6 +48,11 @@ flutter analyze
 - ❌ Mudanças sem análise de impacto
 - ❌ Correções "cegas" (sem pesquisa/análise prévia)
 
+## Manutenção
+- Manter `.gitignore` atualizado (ignorar artefatos de build e venv).
+- Remover arquivos de boilerplate não usados (ex: Counter App).
+- Periodicamente rodar `flutter clean` e remover pastas temporárias.
+
 ## Idioma
 - **Respostas**: Sempre responda em **Português (PT-BR)**, mesmo que o código seja em inglês.
 
@@ -71,11 +76,17 @@ flutter analyze
    - Verifique se *todos* os símbolos usados foram importados. NÃO assuma.
 5. **Aprovação**: Aguarde escolha do usuário.
 
+## Protocolo de Release
+- **Build Release**: Obrigatório usar `--no-tree-shake-icons` para garantir que ícones não sumam.
+- **ProGuard/R8**: Desativar minificação (`isMinifyEnabled = false`) se houver conflito com plugins nativos ou usar regras específicas em `proguard-rules.pro`.
+- **Permissões**: Testar em variantes `release`; permissões como INTERNET podem falhar se não declaradas corretamente no manifest `main`.
+
 ## Testes (Obrigatório)
 - **Testar TUDO**: Unitários, Integração e E2E quando possível.
 - **Tipos de Teste**:
   - Unitários: Lógica isolada (backend services, frontend utils/providers)
-  - Integração: APIs, Fluxos de UI, Conexão com serviços externos (mocks controlados)
+  - Integração: APIs, Fluxos de UI
+  - **Externos (E2E)**: Scripts em `external_tests/` para validação real (simulando cliente).
   - Regressão: Garantir que o novo fix não quebrou o antigo.
 
 - **TDD obrigatório**: teste → código → refactor
@@ -93,7 +104,13 @@ flutter analyze
 - Modificar CI/CD
 - Alterar arquitetura principal
 
-## Docs
+## Documentação
+### Interna (Projeto)
+- **Guia Geral**: `docs/README.md`
+- **Arquitetura**: `docs/ARCHITECTURE.md`
+- **Guias Operacionais**: `docs/GUIDES.md` (Build, Deploy, Debug)
+
+### Referências Externas
 - FastAPI: https://fastapi.tiangolo.com
 - Flutter: https://docs.flutter.dev
 - Riverpod: https://riverpod.dev

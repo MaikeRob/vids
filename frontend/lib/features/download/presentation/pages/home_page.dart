@@ -12,6 +12,7 @@ import '../providers/download_provider.dart';
 import '../widgets/quality_selector.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
 
+/// Tela principal do aplicativo onde o usuário insere a URL e inicia o download.
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
@@ -118,31 +119,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildHeader() {
-    return Column(
-      children: [
-        Icon(
-          PhosphorIcons.youtubeLogo(PhosphorIconsStyle.fill),
-          size: 64,
-          color: Colors.redAccent,
-        ),
-        const Gap(16),
-        Text(
-          'YouTube Downloader',
-          style: GoogleFonts.outfit(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        Text(
-          'Baixe vídeos para estudar offline',
-          style: GoogleFonts.outfit(
-            fontSize: 16,
-            color: Colors.white70,
-          ),
-        ),
-      ],
-    );
+    return const SizedBox.shrink();
   }
 
 
@@ -160,21 +137,68 @@ class _HomePageState extends ConsumerState<HomePage> {
             prefixIcon: const Icon(Icons.link, color: Colors.white54),
           ),
           const Gap(16),
-          if (state is DownloadInfoLoaded && state.availableQualities.isNotEmpty) ...[
+
+          if (state is DownloadInfoLoaded) ...[
+            // Mode Selector (Video / Audio)
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.only(bottom: 16),
-              child: QualitySelector(
-                // Map the full objects to just heights for the selector widget
-                // Assuming QualitySelector expects List<int>
-                qualities: state.availableQualities.map<int>((q) => q['height'] as int).toList(),
-                selectedQuality: state.selectedQuality ?? 0,
-                onSelected: (quality) {
-                  ref.read(downloadProvider.notifier).setQuality(quality);
-                },
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  Expanded(child: _buildModeTab(state, DownloadMode.video, 'Vídeo', Icons.videocam)),
+                  Expanded(child: _buildModeTab(state, DownloadMode.audio, 'Áudio', Icons.music_note)),
+                ],
               ),
             ),
+            const Gap(16),
+
+            if (state.downloadMode == DownloadMode.video) ...[
+               if (state.availableQualities.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: QualitySelector(
+                    qualities: state.availableQualities.map<int>((q) => q['height'] as int).toList(),
+                    selectedQuality: state.selectedQuality ?? 0,
+                    onSelected: (quality) {
+                      ref.read(downloadProvider.notifier).setQuality(quality);
+                    },
+                  ),
+                ),
+            ] else ...[
+               // Audio Format Selector
+               Container(
+                 width: double.infinity,
+                 padding: const EdgeInsets.only(bottom: 16),
+                 child: Column(
+                   crossAxisAlignment: CrossAxisAlignment.start,
+                   children: [
+                     Text(
+                        "Formato do Áudio",
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Gap(12),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          _buildFormatChip(state, AudioFormat.m4a, 'M4A (Rápido)'),
+                          _buildFormatChip(state, AudioFormat.mp3, 'MP3 (Compatível)'),
+                        ],
+                      ),
+                   ],
+                 ),
+               )
+            ]
           ],
+
           PrimaryButton(
             key: const Key('action_button'),
             onPressed: isLoading ? null : _handleDownload,
@@ -186,6 +210,66 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildModeTab(DownloadInfoLoaded state, DownloadMode mode, String label, IconData icon) {
+    bool isSelected = state.downloadMode == mode;
+    return GestureDetector(
+      onTap: () => ref.read(downloadProvider.notifier).setDownloadMode(mode),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18, color: isSelected ? Colors.white : Colors.white54),
+            const Gap(8),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white54,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormatChip(DownloadInfoLoaded state, AudioFormat format, String label) {
+    bool isSelected = state.audioFormat == format;
+    return GestureDetector(
+      onTap: () => ref.read(downloadProvider.notifier).setAudioFormat(format),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.accentPurple.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+          border: Border.all(
+            color: isSelected ? AppColors.accentPurple : Colors.white.withOpacity(0.1),
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            if (isSelected) ...[
+               const Icon(Icons.check, size: 14, color: AppColors.accentPurple),
+               const Gap(6),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? AppColors.accentPurple : Colors.white70,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -242,20 +326,22 @@ class _HomePageState extends ConsumerState<HomePage> {
             const Gap(12),
 
             // Video Progress
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Vídeo', style: TextStyle(color: Colors.white70)),
-                Text('${state.videoProgress.toStringAsFixed(0)}%', style: const TextStyle(color: Colors.white)),
-              ],
-            ),
-            const Gap(4),
-            LinearProgressIndicator(
-              value: state.videoProgress / 100,
-              backgroundColor: Colors.white10,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accentCyan),
-            ),
-            const Gap(12),
+            if (state.downloadMode == DownloadMode.video) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Vídeo', style: TextStyle(color: Colors.white70)),
+                  Text('${state.videoProgress.toStringAsFixed(0)}%', style: const TextStyle(color: Colors.white)),
+                ],
+              ),
+              const Gap(4),
+              LinearProgressIndicator(
+                value: state.videoProgress / 100,
+                backgroundColor: Colors.white10,
+                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accentCyan),
+              ),
+              const Gap(12),
+            ],
 
              // Audio Progress
             Row(
@@ -274,15 +360,15 @@ class _HomePageState extends ConsumerState<HomePage> {
 
             if (state.isMerging) ...[
               const Gap(16),
-              const Row(
+               Row(
                 children: [
-                  SizedBox(
+                  const SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white,)
                   ),
-                  Gap(8),
-                  Text('Unindo arquivos (FFmpeg)...', style: TextStyle(color: Colors.yellowAccent)),
+                  const Gap(8),
+                  Text(state.statusMessage, style: const TextStyle(color: Colors.yellowAccent)),
                 ],
               )
             ]

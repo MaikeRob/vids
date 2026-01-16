@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -14,6 +15,7 @@ class SettingsPage extends ConsumerStatefulWidget {
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   late TextEditingController _ipController;
   late TextEditingController _portController;
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -25,9 +27,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _ipController.dispose();
     _portController.dispose();
     super.dispose();
+  }
+
+  void _onChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 800), () {
+      ref.read(settingsProvider.notifier).updateSettings(
+            _ipController.text.trim(),
+            _portController.text.trim(),
+          );
+    });
   }
 
   void _save() {
@@ -36,9 +49,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _portController.text.trim(),
     );
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Configurações salvas!')),
+      const SnackBar(content: Text('Configurações salvas e verificadas!')),
     );
-    Navigator.pop(context);
+    // Não fecha a tela para permitir visualização do status
   }
 
   void _reset() async {
@@ -55,6 +68,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final settingsState = ref.watch(settingsProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -67,65 +82,135 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Endereço do Backend',
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Endereço do Backend',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Gap(8),
+              const Text(
+                'Configure o IP e a porta onde o backend FastAPI está rodando.',
+                style: TextStyle(color: Colors.grey),
+              ),
+              const Gap(24),
+              _buildTextField(
+                controller: _ipController,
+                label: 'Endereço IP',
+                hint: 'Ex: 10.0.2.2 (Android) ou 127.0.0.1 (PC)',
+                onChanged: (_) => _onChanged(),
+              ),
+              const Gap(16),
+              _buildTextField(
+                controller: _portController,
+                label: 'Porta',
+                hint: 'Ex: 8000',
+                keyboardType: TextInputType.number,
+                onChanged: (_) => _onChanged(),
+              ),
+              const Gap(24),
+              _buildHealthStatus(settingsState),
+              const Gap(32),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _save,
+                  icon: const Icon(Icons.check_circle),
+                  label: const Text('Salvar e Verificar'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+              const Gap(16),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: _reset,
+                  icon: const Icon(Icons.restore),
+                  label: const Text('Resetar Padrão (Auto)'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.accentCyan,
+                    side: const BorderSide(color: AppColors.accentCyan),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHealthStatus(SettingsState state) {
+    Color color;
+    IconData icon;
+    String text;
+
+    switch (state.healthStatus) {
+      case HealthStatus.initial:
+        return const SizedBox.shrink();
+      case HealthStatus.checking:
+        color = Colors.blue;
+        icon = Icons.refresh;
+        text = 'Verificando conexão...';
+        break;
+      case HealthStatus.success:
+        color = Colors.green;
+        icon = Icons.check_circle_outline;
+        text = 'Health check ok, API alcançável';
+        break;
+      case HealthStatus.error:
+        color = Colors.orange;
+        icon = Icons.warning_amber_rounded;
+        text = state.errorMessage ?? 'Erro na API';
+        break;
+      case HealthStatus.unreachable:
+        color = Colors.red;
+        icon = Icons.error_outline;
+        text = state.errorMessage ?? 'API Inalcançável';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        border: Border.all(color: color.withOpacity(0.5)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+           state.healthStatus == HealthStatus.checking
+              ? SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
+                  ),
+                )
+              : Icon(icon, color: color),
+          const Gap(16),
+          Expanded(
+            child: Text(
+              text,
               style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
+                color: color,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const Gap(8),
-            const Text(
-              'Configure o IP e a porta onde o backend FastAPI está rodando.',
-              style: TextStyle(color: Colors.grey),
-            ),
-            const Gap(24),
-            _buildTextField(
-              controller: _ipController,
-              label: 'Endereço IP',
-              hint: 'Ex: 10.0.2.2 (Android) ou 127.0.0.1 (PC)',
-            ),
-            const Gap(16),
-            _buildTextField(
-              controller: _portController,
-              label: 'Porta',
-              hint: 'Ex: 8000',
-              keyboardType: TextInputType.number,
-            ),
-            const Gap(32),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: _save,
-                icon: const Icon(Icons.save),
-                label: const Text('Salvar Alterações'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ),
-            const Gap(16),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: OutlinedButton.icon(
-                onPressed: _reset,
-                icon: const Icon(Icons.restore),
-                label: const Text('Resetar Padrão (Auto)'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.accentCyan,
-                  side: const BorderSide(color: AppColors.accentCyan),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -135,6 +220,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     required String label,
     required String hint,
     TextInputType? keyboardType,
+    void Function(String)? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,6 +231,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           controller: controller,
           keyboardType: keyboardType,
           style: const TextStyle(color: Colors.white),
+          onChanged: onChanged,
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),

@@ -1,13 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/datasources/download_api_client.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:ffmpeg_kit_flutter_new_min_gpl/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new_min_gpl/return_code.dart';
+import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../settings/presentation/providers/settings_provider.dart';
+
+// Enums
+enum DownloadMode { video, audio }
+enum AudioFormat { m4a, mp3 }
 
 // Providers
 // Recria o cliente sempre que as configurações mudarem
@@ -30,14 +34,27 @@ class DownloadInfoLoaded extends DownloadState {
   final Map<String, dynamic> info;
   final List<dynamic> availableQualities;
   final int? selectedQuality;
+  final DownloadMode downloadMode;
+  final AudioFormat audioFormat;
 
-  DownloadInfoLoaded(this.info, {this.availableQualities = const [], this.selectedQuality});
+  DownloadInfoLoaded(this.info, {
+    this.availableQualities = const [],
+    this.selectedQuality,
+    this.downloadMode = DownloadMode.video,
+    this.audioFormat = AudioFormat.m4a,
+  });
 
-  DownloadInfoLoaded copyWith({int? selectedQuality}) {
+  DownloadInfoLoaded copyWith({
+    int? selectedQuality,
+    DownloadMode? downloadMode,
+    AudioFormat? audioFormat,
+  }) {
     return DownloadInfoLoaded(
       info,
       availableQualities: availableQualities,
       selectedQuality: selectedQuality ?? this.selectedQuality,
+      downloadMode: downloadMode ?? this.downloadMode,
+      audioFormat: audioFormat ?? this.audioFormat,
     );
   }
 }
@@ -47,23 +64,31 @@ class DownloadProcessing extends DownloadState {
   final double videoProgress;
   final double audioProgress;
   final bool isMerging;
+  final String statusMessage;
+  final DownloadMode downloadMode;
 
   DownloadProcessing(this.info, {
     this.videoProgress = 0,
     this.audioProgress = 0,
     this.isMerging = false,
+    this.statusMessage = 'Processando...',
+    this.downloadMode = DownloadMode.video,
   });
 
   DownloadProcessing copyWith({
     double? videoProgress,
     double? audioProgress,
     bool? isMerging,
+    String? statusMessage,
+    DownloadMode? downloadMode,
   }) {
     return DownloadProcessing(
       info,
       videoProgress: videoProgress ?? this.videoProgress,
       audioProgress: audioProgress ?? this.audioProgress,
       isMerging: isMerging ?? this.isMerging,
+      statusMessage: statusMessage ?? this.statusMessage,
+      downloadMode: downloadMode ?? this.downloadMode,
     );
   }
 }
@@ -79,6 +104,10 @@ class DownloadError extends DownloadState {
 }
 
 // Notifier
+/// Gerencia o estado e a lógica de download de vídeos.
+///
+/// Responsável por comunicar com a API, gerenciar o estado de [DownloadState]
+/// e coordenar downloads paralelos de vídeo e áudio.
 class DownloadNotifier extends Notifier<DownloadState> {
   late DownloadApiClient _client;
 
@@ -125,14 +154,30 @@ class DownloadNotifier extends Notifier<DownloadState> {
     }
   }
 
+  void setDownloadMode(DownloadMode mode) {
+    if (state is DownloadInfoLoaded) {
+      state = (state as DownloadInfoLoaded).copyWith(downloadMode: mode);
+    }
+  }
+
+  void setAudioFormat(AudioFormat format) {
+    if (state is DownloadInfoLoaded) {
+      state = (state as DownloadInfoLoaded).copyWith(audioFormat: format);
+    }
+  }
+
   Future<void> startDownload(String url, Map<String, dynamic> info) async {
     final currentState = state;
-    int? quality;
+    if (currentState is! DownloadInfoLoaded) return;
+
+    final mode = currentState.downloadMode;
+    final audioFormat = currentState.audioFormat;
+
+    int? quality = currentState.selectedQuality;
     int videoSize = 0;
     int audioSize = info['audio_filesize'] ?? 0;
 
-    if (currentState is DownloadInfoLoaded) {
-      quality = currentState.selectedQuality;
+    if (mode == DownloadMode.video) {
       // Find estimated video size
       final qObj = currentState.availableQualities.firstWhere(
         (q) => q['height'] == quality,
@@ -141,7 +186,11 @@ class DownloadNotifier extends Notifier<DownloadState> {
       videoSize = qObj['filesize'] ?? 0;
     }
 
-    state = DownloadProcessing(info);
+    state = DownloadProcessing(
+      info,
+      statusMessage: mode == DownloadMode.video ? 'Baixando faixas...' : 'Baixando áudio...',
+      downloadMode: mode,
+    );
 
     try {
       String saveDir;
@@ -154,117 +203,130 @@ class DownloadNotifier extends Notifier<DownloadState> {
         saveDir = appDir.path;
       }
 
+      // Clean old temps
       final videoPath = '$saveDir/temp_video.mp4';
       final audioPath = '$saveDir/temp_audio.m4a';
-      // Nome limpo para o arquivo final temporário
       final cleanTitle = info['title'].replaceAll(RegExp(r'[^\w\s]+'), '');
-      final tempFinalPath = '$saveDir/$cleanTitle.mp4';
 
-      // Clean old temps
+      // Determine final extension based on mode/format
+      String finalExt = '.mp4';
+      if (mode == DownloadMode.audio) {
+        finalExt = audioFormat == AudioFormat.mp3 ? '.mp3' : '.m4a';
+      }
+      final tempFinalPath = '$saveDir/$cleanTitle$finalExt';
+
       if (File(videoPath).existsSync()) File(videoPath).deleteSync();
       if (File(audioPath).existsSync()) File(audioPath).deleteSync();
       if (File(tempFinalPath).existsSync()) File(tempFinalPath).deleteSync();
 
-      // Parallel Downloads
-      final videoFuture = _client.downloadStream(
-        url: url,
-        mode: 'video',
-        quality: quality,
-        savePath: videoPath,
-        onReceiveProgress: (received, total) {
-           // If total is -1 (chunked), use estimated size
-           final effectiveTotal = (total != -1) ? total : videoSize;
-           double p = 0;
-           if (effectiveTotal > 0) p = (received / effectiveTotal) * 100;
-           if (p > 100) p = 100;
+      if (mode == DownloadMode.video) {
+        // --- VIDEO MODE ---
+        final videoFuture = _client.downloadStream(
+          url: url,
+          mode: 'video',
+          quality: quality,
+          savePath: videoPath,
+          onReceiveProgress: (received, total) {
+             final effectiveTotal = (total != -1) ? total : videoSize;
+             double p = 0;
+             if (effectiveTotal > 0) p = (received / effectiveTotal) * 100;
+             if (p > 100) p = 100;
+             if (state is DownloadProcessing) {
+               state = (state as DownloadProcessing).copyWith(videoProgress: p);
+             }
+          },
+        );
 
-           if (state is DownloadProcessing) {
-             state = (state as DownloadProcessing).copyWith(videoProgress: p);
-           }
-        },
-      );
+        final audioFuture = _client.downloadStream(
+          url: url,
+          mode: 'audio',
+          savePath: audioPath,
+          onReceiveProgress: (received, total) {
+             final effectiveTotal = (total != -1) ? total : audioSize;
+             double p = 0;
+             if (effectiveTotal > 0) p = (received / effectiveTotal) * 100;
+             if (p > 100) p = 100;
+             if (state is DownloadProcessing) {
+               state = (state as DownloadProcessing).copyWith(audioProgress: p);
+             }
+          },
+        );
 
-      final audioFuture = _client.downloadStream(
-        url: url,
-        mode: 'audio',
-        savePath: audioPath,
-        onReceiveProgress: (received, total) {
-           final effectiveTotal = (total != -1) ? total : audioSize;
-           double p = 0;
-           if (effectiveTotal > 0) p = (received / effectiveTotal) * 100;
-           if (p > 100) p = 100;
+        await Future.wait([videoFuture, audioFuture]);
 
-           if (state is DownloadProcessing) {
-             state = (state as DownloadProcessing).copyWith(audioProgress: p);
-           }
-        },
-      );
+        // Merge Video + Audio
+        await Future.delayed(const Duration(milliseconds: 1000));
 
-      await Future.wait([videoFuture, audioFuture]);
+        if (state is DownloadProcessing) {
+          state = (state as DownloadProcessing).copyWith(isMerging: true, statusMessage: 'Unindo arquivos...');
+        }
+        await _mergeVideoAudio(videoPath, audioPath, tempFinalPath);
 
-      // DEBUG: Verificar arquivos antes do merge
-      final videoFile = File(videoPath);
-      final audioFile = File(audioPath);
-
-      debugPrint("DEBUG Check Video: exists=${videoFile.existsSync()}, path=$videoPath");
-      if (videoFile.existsSync()) {
-         debugPrint("DEBUG Video Size: ${videoFile.lengthSync()} bytes");
-      }
-
-      debugPrint("DEBUG Check Audio: exists=${audioFile.existsSync()}, path=$audioPath");
-      if (audioFile.existsSync()) {
-         debugPrint("DEBUG Audio Size: ${audioFile.lengthSync()} bytes");
       } else {
-         throw Exception("Arquivo de áudio não foi baixado corretamente: $audioPath");
+        // --- AUDIO MODE ---
+        await _client.downloadStream(
+          url: url,
+          mode: 'audio',
+          savePath: audioPath, // Baixa como m4a primeiro
+          onReceiveProgress: (received, total) {
+             final effectiveTotal = (total != -1) ? total : audioSize;
+             double p = 0;
+             if (effectiveTotal > 0) p = (received / effectiveTotal) * 100;
+             if (p > 100) p = 100;
+             if (state is DownloadProcessing) {
+               state = (state as DownloadProcessing).copyWith(audioProgress: p); // Use audio/video progress generic?
+               // Audio fills audioProgress, video stays 0
+             }
+          },
+        );
+
+        await Future.delayed(const Duration(milliseconds: 1000));
+
+        if (audioFormat == AudioFormat.mp3) {
+           if (state is DownloadProcessing) {
+             state = (state as DownloadProcessing).copyWith(isMerging: true, statusMessage: 'Convertendo para MP3...');
+           }
+           await _convertToMp3(audioPath, tempFinalPath);
+        } else {
+           // M4A - Just rename/copy
+           // O arquivo já está em audioPath (m4a), mas precisamos mover para tempFinalPath para o passo de copia pública
+           await File(audioPath).copy(tempFinalPath);
+        }
       }
 
-      if (!videoFile.existsSync()) {
-        throw Exception("Arquivo de vídeo não foi baixado corretamente: $videoPath");
-      }
-
-      // Delay para garantir que o sistema de arquivos liberou o lock (Race Condition Fix)
-      await Future.delayed(const Duration(milliseconds: 1500));
-
-      // Merge
-      if (state is DownloadProcessing) {
-        state = (state as DownloadProcessing).copyWith(isMerging: true);
-      }
-
-      await _mergeFiles(videoPath, audioPath, tempFinalPath);
-
-      // Cleanup Temps
+      // Cleanup Temps (exceto o final se for direto)
       if (File(videoPath).existsSync()) await File(videoPath).delete();
       if (File(audioPath).existsSync()) await File(audioPath).delete();
 
       String finalPublicPath = tempFinalPath;
 
-      // Se Android, copiar para public downloads
+      // Copy to Public Directory (Android)
       if (Platform.isAndroid) {
          try {
-            // Verificar permissão antes de copiar
              if (await Permission.videos.request().isGranted ||
+                await Permission.audio.request().isGranted ||
                 await Permission.storage.request().isGranted ||
                 await Permission.manageExternalStorage.request().isGranted) {
 
-                final publicDir = Directory('/storage/emulated/0/Download');
+                // Folder selection based on type
+                String folderName = (mode == DownloadMode.video) ? 'Movies' : 'Music'; // Or Download for both?
+                // User requirement implied standards. Let's stick to Download folder as it is easier to find.
+                folderName = 'Download';
+
+                final publicDir = Directory('/storage/emulated/0/$folderName');
                 if (!publicDir.existsSync()) {
                   publicDir.createSync(recursive: true);
                 }
 
-                final publicPath = '${publicDir.path}/$cleanTitle.mp4';
+                final publicPath = '${publicDir.path}/$cleanTitle$finalExt';
 
-                // Copiar
                 await File(tempFinalPath).copy(publicPath);
-
-                // Deletar o processado privado
-                await File(tempFinalPath).delete();
+                await File(tempFinalPath).delete(); // Delete internal temp
 
                 finalPublicPath = publicPath;
              }
          } catch (e) {
             debugPrint("Erro ao copiar para público: $e");
-            // Se falhar copia, finalPublicPath continua sendo o privado,
-            // que ainda é acessível mas não "público" na galeria padrão sem scan
          }
       }
 
@@ -277,15 +339,20 @@ class DownloadNotifier extends Notifier<DownloadState> {
     }
   }
 
-  Future<void> _mergeFiles(String videoPath, String audioPath, String outputPath) async {
-    // Command: -i video -i audio -c:v copy -c:a copy output.mp4
-    // Using copy is faster than re-encoding
-    // Aspas duplas para garantir que espaços não quebrem
+  Future<void> _mergeVideoAudio(String videoPath, String audioPath, String outputPath) async {
+    // -c:v copy -c:a copy
     final command = '-i "$videoPath" -i "$audioPath" -c:v copy -c:a copy "$outputPath"';
+    await _runFFmpeg(command, "Merge falhou");
+  }
 
+  Future<void> _convertToMp3(String inputPath, String outputPath) async {
+    // -c:a libmp3lame -q:a 2 (High quality variable bitrate)
+    final command = '-i "$inputPath" -c:a libmp3lame -q:a 2 "$outputPath"';
+    await _runFFmpeg(command, "Conversão MP3 falhou");
+  }
+
+  Future<void> _runFFmpeg(String command, String errorMessage) async {
     debugPrint("FFmpeg Start: $command");
-
-    // Usar execute (síncrono/awaitable) para capturar o erro corretamente no fluxo principal
     await FFmpegKit.execute(command).then((session) async {
       final returnCode = await session.getReturnCode();
       if (ReturnCode.isSuccess(returnCode)) {
@@ -293,7 +360,7 @@ class DownloadNotifier extends Notifier<DownloadState> {
       } else {
         final logs = await session.getAllLogsAsString();
         debugPrint("FFmpeg Fail: $logs");
-        throw Exception("Merge falhou: Verifique logs para detalhes.");
+        throw Exception("$errorMessage: Verifique logs.");
       }
     });
   }

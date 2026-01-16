@@ -15,6 +15,15 @@ class YtDlpService:
 
     @staticmethod
     def get_info(url: str):
+        """
+        Extrai informações do vídeo usando yt-dlp.
+
+        Args:
+            url (str): URL do vídeo do YouTube.
+
+        Returns:
+            dict: Dicionário contendo metadados e formatos filtrados.
+        """
         YtDlpService.validate_integrity()
         ydl_opts = {
             'quiet': True,

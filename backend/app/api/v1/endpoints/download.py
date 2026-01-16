@@ -8,6 +8,11 @@ router = APIRouter()
 
 @router.post("/info", response_model=VideoInfo)
 async def get_video_info(request: DownloadRequest):
+    """
+    Obtém metadados de um vídeo do YouTube.
+
+    Recupera título, thumbnail, duração e lista de formatos disponíveis.
+    """
     try:
         info = YtDlpService.get_info(request.url)
         return VideoInfo(

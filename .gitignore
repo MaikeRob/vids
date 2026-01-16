@@ -2,3 +2,9 @@
 .vscode/
 *.log
 .DS_Store
+
+# External Tests
+external_tests/.venv/
+external_tests/__pycache__/
+external_tests/test_downloads/
+external_tests/*.egg-info/
